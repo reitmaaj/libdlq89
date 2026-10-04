@@ -1,0 +1,51 @@
+# libdlq89
+
+`libdlq89` implements DLQ v1: a small read-only conjunctive-query language in
+strict ISO C89.
+
+DLQ contains queries only:
+
+    ?- edge(X, Y), edge(Y, Z).
+    ?- ready().
+    ?- color(X, "blue").
+    ?- age("alice", 42).
+
+The lexical model is shared with DLX v1: source must be valid UTF-8; whitespace
+is U+0020, U+0009, U+000A, or U+000D; identifiers use UAX #31
+XID_Start/XID_Continue and compare by NFC-normalized spelling; strings are exact
+and non-normalized, with JSON escapes (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`,
+`\r`, `\t`, `\uXXXX`, including valid surrogate pairs). Integer literals are
+arbitrary-precision and canonicalized to ASCII without a leading `+`, without
+leading zeros, and without a sign on zero. DLQ v1 has no comments.
+
+Scalar values carry a kind: an integer and the string with the same spelling
+are distinct values (`42` and `"42"` never compare equal).
+
+An identifier in term position is a query variable. Predicate position is a
+separate namespace. Repeated variable names impose equality. Result columns
+follow first textual variable occurrence. Duplicate result rows collapse.
+Queries with no variables, including nullary queries, produce BOOLEAN results.
+
+The host supplies a narrow read-only database adapter: open one snapshot,
+resolve a predicate by NFC name plus arity, and scan with a bound-position mask.
+The snapshot remains pinned for the entire DLQ document; base and derived facts
+therefore come from one committed database state. `libdlq89` neither evaluates
+Datalog rules nor mutates storage.
+
+Execution is cursor-based. `dlq89_cursor_next_result()` yields each query in
+source order. TABLE rows come from `dlq89_result_next_row()` until `DLQ89_END`.
+A caller must finish a TABLE result before advancing to the next query. A
+negative execution status is terminal: previously returned rows remain valid as
+results already observed, the current result is incomplete, and later queries
+are skipped. Destroy remains valid after every status.
+
+`libunicode89` is the sole library dependency; it supplies strict UTF-8
+validation, UAX #31 identifier properties, UTF-16 surrogate decoding, and NFC
+normalization.
+
+Build and test:
+
+    just build
+    just headers
+    just smoke
+    just test
